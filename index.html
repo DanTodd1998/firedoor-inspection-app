@@ -802,26 +802,50 @@ function generate(scope){
   }
   document.getElementById("reportActions").style.display="block";
   window.scrollTo(0,0);
-}
 async function downloadPdf(){
   var btn=document.getElementById("dlpdf");
-  if(!window.PDFLib){alert("The PDF engine did not load. Please open this file in Safari or Chrome (not inside another app preview), then try again.");return;}
-  if(btn){btn.textContent="Generating\u2026";btn.disabled=true;}
+  if(window._pdfBusy)return;
+  if(!window.PDFLib){
+    alert("The PDF engine did not load. Please open this file in Safari or Chrome (not inside another app preview), then try again.");
+    return;
+  }
+
+  window._pdfBusy=true;
+  if(btn){
+    btn.textContent="Generating…";
+    btn.disabled=true;
+  }
+
   try{
-    var arr=repScope==="all"?doors:[doors[cur]];
+    var arr=repScope==="all" ? doors : [doors[cur]];
     var prop=(arr[0]&&arr[0].fields.propName)||"";
-    var base=(repScope==="all"?(prop||"Fire Door Survey"):((prop?prop+" - ":"")+((doors[cur].fields.a_name)||"Door report"))).replace(/[\\/:*?\"<>|]/g,"-");
-    // Report PDF (survey + photos only)
+    var base=(
+      repScope==="all"
+        ? (prop||"Fire Door Survey")
+        : ((prop?prop+" - ":"")+((doors[cur].fields.a_name)||"Door report"))
+    ).replace(/[\\/:*?"<>|]/g,"-");
+
+    // Report PDF
     var rbytes=await makePdf(window.PDFLib,arr,"report");
     pdfName=base+" - Survey Report.pdf";
     pdfBlob=new Blob([rbytes],{type:"application/pdf"});
-    // Quote PDF (client-facing quotation only)
+
+    // Quote PDF
     var qbytes=await makePdf(window.PDFLib,arr,"quote");
     quoteName=base+" - Quotation.pdf";
     quoteBlob=new Blob([qbytes],{type:"application/pdf"});
+
     showPdfLink();
-  }catch(e){alert("Sorry, could not generate the PDFs: "+(e&&e.message?e.message:e));}
-  if(btn){btn.textContent="\u2b07 Generate PDFs";btn.disabled=false;}
+
+  }catch(e){
+    alert("Sorry, could not generate the PDFs: "+(e&&e.message?e.message:e));
+  }finally{
+    window._pdfBusy=false;
+    if(btn){
+      btn.textContent="⬇ Generate PDFs";
+      btn.disabled=false;
+    }
+  }
 }
 function showPdfLink(){
   var box=document.getElementById("pdfready");
