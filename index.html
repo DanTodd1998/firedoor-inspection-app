@@ -158,7 +158,7 @@ body.report #reportView{display:block}
   <div class="t" style="margin-left:4px">Fire Door Survey<small>London &amp; Kent Construction &middot; 020 8850 7064</small></div>
   <span class="modebadge" id="modeBadge">Survey</span>
 </div></div>
-<div class="intro">Record each door, attach photos, then <b>This door</b> or <b>All doors</b> &rarr; <b>Generate PDFs</b>. The report and the quote are now produced as <b>two separate documents</b>. Everything stays on this device. <span style="opacity:.6">(v11)</span></div>
+<div class="intro">Record each door, attach photos, then <b>This door</b> or <b>All doors</b> &rarr; <b>Generate PDFs</b>. The report and the quote are now produced as <b>two separate documents</b>. Everything stays on this device. <span style="opacity:.6">(v10)</span></div>
 <div class="doors"><div class="inner" id="doorsStrip"></div></div>
 
 <div class="wrap">
@@ -465,11 +465,11 @@ function priceCategory(f){
 }
 
 /* Build the priced line items for a door. Returns {lines:[{name,rate}], cat}. */
-Lines(f){
+function quoteLines(f){
   var cat=priceCategory(f), lines=[];
   if(cat==="none")return {lines:lines,cat:cat};
   if(cat==="replace"){
-    vafunction quoter t=f.replace_type||"std30";
+    var t=f.replace_type||"std30";
     lines.push({name:PRICING[t].name,rate:PRICING[t].rate});
     return {lines:lines,cat:cat};                 // replacement includes all trimmings
   }
@@ -802,50 +802,26 @@ function generate(scope){
   }
   document.getElementById("reportActions").style.display="block";
   window.scrollTo(0,0);
+}
 async function downloadPdf(){
   var btn=document.getElementById("dlpdf");
-  if(window._pdfBusy)return;
-  if(!window.PDFLib){
-    alert("The PDF engine did not load. Please open this file in Safari or Chrome (not inside another app preview), then try again.");
-    return;
-  }
-
-  window._pdfBusy=true;
-  if(btn){
-    btn.textContent="Generating…";
-    btn.disabled=true;
-  }
-
+  if(!window.PDFLib){alert("The PDF engine did not load. Please open this file in Safari or Chrome (not inside another app preview), then try again.");return;}
+  if(btn){btn.textContent="Generating\u2026";btn.disabled=true;}
   try{
-    var arr=repScope==="all" ? doors : [doors[cur]];
+    var arr=repScope==="all"?doors:[doors[cur]];
     var prop=(arr[0]&&arr[0].fields.propName)||"";
-    var base=(
-      repScope==="all"
-        ? (prop||"Fire Door Survey")
-        : ((prop?prop+" - ":"")+((doors[cur].fields.a_name)||"Door report"))
-    ).replace(/[\\/:*?"<>|]/g,"-");
-
-    // Report PDF
+    var base=(repScope==="all"?(prop||"Fire Door Survey"):((prop?prop+" - ":"")+((doors[cur].fields.a_name)||"Door report"))).replace(/[\\/:*?\"<>|]/g,"-");
+    // Report PDF (survey + photos only)
     var rbytes=await makePdf(window.PDFLib,arr,"report");
     pdfName=base+" - Survey Report.pdf";
     pdfBlob=new Blob([rbytes],{type:"application/pdf"});
-
-    // Quote PDF
+    // Quote PDF (client-facing quotation only)
     var qbytes=await makePdf(window.PDFLib,arr,"quote");
     quoteName=base+" - Quotation.pdf";
     quoteBlob=new Blob([qbytes],{type:"application/pdf"});
-
     showPdfLink();
-
-  }catch(e){
-    alert("Sorry, could not generate the PDFs: "+(e&&e.message?e.message:e));
-  }finally{
-    window._pdfBusy=false;
-    if(btn){
-      btn.textContent="⬇ Generate PDFs";
-      btn.disabled=false;
-    }
-  }
+  }catch(e){alert("Sorry, could not generate the PDFs: "+(e&&e.message?e.message:e));}
+  if(btn){btn.textContent="\u2b07 Generate PDFs";btn.disabled=false;}
 }
 function showPdfLink(){
   var box=document.getElementById("pdfready");
