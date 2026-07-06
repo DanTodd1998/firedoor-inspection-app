@@ -465,11 +465,11 @@ function priceCategory(f){
 }
 
 /* Build the priced line items for a door. Returns {lines:[{name,rate}], cat}. */
-function quoteLines(f){
+Lines(f){
   var cat=priceCategory(f), lines=[];
   if(cat==="none")return {lines:lines,cat:cat};
   if(cat==="replace"){
-    var t=f.replace_type||"std30";
+    vafunction quoter t=f.replace_type||"std30";
     lines.push({name:PRICING[t].name,rate:PRICING[t].rate});
     return {lines:lines,cat:cat};                 // replacement includes all trimmings
   }
