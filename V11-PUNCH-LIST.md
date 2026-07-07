@@ -7,7 +7,7 @@ Finish and polish the current Fire Door Inspection App before adding bigger feat
 - [ ] Confirm boss/client wording changes
 - [ ] Check quote layout against existing company quotation
 - [ ] Check totals, VAT, subtotal, and line item wording
-- [ ] Check quote filename format
+- [x] Check quote filename format
 
 ## Survey Report Tweaks
 - [ ] Check report wording
@@ -16,12 +16,12 @@ Finish and polish the current Fire Door Inspection App before adding bigger feat
 - [ ] Check report filename format
 
 ## App Stability
-- [ ] Test Generate PDFs
-- [ ] Test Edit after PDF generation
-- [ ] Test Add Door
-- [ ] Test Duplicate Door
-- [ ] Test Backup to file
-- [ ] Test Add doors from file
+- [x] Test Generate PDFs
+- [x] Test Edit after PDF generation
+- [x] Test Add Door
+- [x] Test Duplicate Door
+- [x] Test Backup to file
+- [x] Test Add doors from file
 
 ## Final V11 Release
 - [ ] Test locally
