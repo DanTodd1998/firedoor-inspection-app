@@ -837,7 +837,7 @@ async function savePdf(which){
   which=which||"report";
   var blob=which==="quote"?quoteBlob:pdfBlob, name=which==="quote"?quoteName:pdfName;
   if(!blob)return;
-  try{ if(navigator.canShare){var f=new File([blob],name,{type:"application/pdf"}); if(navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:name}); return; } } }catch(e){ if(e&&e.name==="AbortError")return; }
+  try{var isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent); if(isMobile&&navigator.canShare){var f=new File([blob],name,{type:"application/pdf"}); if(navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:name}); return; } }}catch(e){ if(e&&e.name==="AbortError")return; }
   var url=URL.createObjectURL(blob);
   try{var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();}catch(e){}
   setTimeout(function(){ try{ window.location.href=url; }catch(e){ window.open(url,"_blank"); } }, 250);
@@ -852,3 +852,4 @@ document.addEventListener("input",saveForm);
 </script>
 </body>
 </html>
+
