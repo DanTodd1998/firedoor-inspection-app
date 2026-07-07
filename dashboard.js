@@ -41,6 +41,34 @@ async function loadJobsDashboard() {
   document.body.prepend(dashboard);
 }
 
+async function loadSavedDoorsForJob(jobId) {
+  const { data: savedDoors, error } = await window.fdimsSupabase
+    .from("doors")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("door_index", { ascending: true });
+
+  if (error) {
+    console.error("Failed to load saved doors:", error);
+    doors = [blankDoor()];
+    cur = 0;
+    return;
+  }
+
+  if (savedDoors && savedDoors.length) {
+    doors = savedDoors.map(row => ({
+      fields: row.fields || {},
+      photos: {}
+    }));
+    cur = 0;
+    console.log("Loaded saved doors:", savedDoors);
+  } else {
+    doors = [blankDoor()];
+    cur = 0;
+    console.log("No saved doors yet. Starting blank inspection.");
+  }
+}
+
 async function startInspectionJob(jobId) {
   const { data: job, error } = await window.fdimsSupabase
     .from("jobs")
@@ -67,18 +95,21 @@ async function startInspectionJob(jobId) {
 
   const actionsBar = document.querySelector(".actions");
   if (actionsBar) actionsBar.style.display = "";
-restore();
+
+  await loadSavedDoorsForJob(jobId);
+
   buildForm();
+  loadDoor();
 
   if (surveyView) {
-  surveyView.addEventListener("input", function () {
-    saveForm();
+    surveyView.addEventListener("input", function () {
+      saveForm();
 
-    if (typeof syncCurrentDoor === "function") {
-      syncCurrentDoor();
-    }
-  });
-}
+      if (typeof syncCurrentDoor === "function") {
+        syncCurrentDoor();
+      }
+    });
+  }
 
   setTimeout(function () {
     const job = window.currentJob;
@@ -86,7 +117,7 @@ restore();
 
     const setVal = (id, value) => {
       const el = document.getElementById(id);
-      if (el) el.value = value || "";
+      if (el && !el.value) el.value = value || "";
     };
 
     setVal("propName", job.building_name || "");
