@@ -320,8 +320,8 @@ async function makePdf(PDFLib, arr, mode){
     // client / property block (multi-line, not crammed)
     band('QUOTE DETAILS');
     grid([
-      ['Client',g('producedFor')], ['Door ID / Location',(g('a_name')||'')+(g('a_loc')?' \u2013 '+g('a_loc'):'')],
-      ['Property',g('propName')], ['Door Type',g('a_type')],
+      ['Recipient',g('producedFor')], ['Door ID / Location',(g('a_name')||'')+(g('a_loc')?' \u2013 '+g('a_loc'):'')],
+      ['Property Address',g('propName')], ['Door Type',g('a_type')],
       ['Property Postcode',g('propAddr')], ['Scope',CAT_LABELS[q.cat]+(q.cat==='replace'?' ('+REPLACE_LABELS[f.replace_type||'std30']+')':'')],
       ['Property Reference',g('propRef')], ['Issue Date',fmtDate(g('assessDate'))]
     ]);
@@ -852,4 +852,5 @@ document.addEventListener("input",saveForm);
 </script>
 </body>
 </html>
+
 
