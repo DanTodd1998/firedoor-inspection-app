@@ -27,9 +27,7 @@ async function loadJobsDashboard() {
                 ${job.company_name || ""}<br>
                 ${job.full_address || ""}<br>
                 <small>${job.inspection_date || ""}</small><br><br>
-
-                <button class="btn btn-primary"
-                        onclick="startInspectionJob('${job.id}')">
+                <button class="btn btn-primary" onclick="startInspectionJob('${job.id}')">
                   Start Inspection
                 </button>
               </div>
@@ -44,7 +42,6 @@ async function loadJobsDashboard() {
 }
 
 async function startInspectionJob(jobId) {
-
   const { data: job, error } = await window.fdimsSupabase
     .from("jobs")
     .select("*")
@@ -70,11 +67,20 @@ async function startInspectionJob(jobId) {
 
   const actionsBar = document.querySelector(".actions");
   if (actionsBar) actionsBar.style.display = "";
-
+restore();
   buildForm();
 
-  setTimeout(function () {
+  if (surveyView) {
+  surveyView.addEventListener("input", function () {
+    saveForm();
 
+    if (typeof syncCurrentDoor === "function") {
+      syncCurrentDoor();
+    }
+  });
+}
+
+  setTimeout(function () {
     const job = window.currentJob;
     if (!job) return;
 
@@ -83,10 +89,9 @@ async function startInspectionJob(jobId) {
       if (el) el.value = value || "";
     };
 
-    // Temporary mapping
     setVal("propName", job.building_name || "");
     setVal("propRef", "");
-    setVal("propAddr", job.prop_postcode || "");
+    setVal("propAddr", "");
     setVal("producedFor", "");
     setVal("assessDate", job.inspection_date);
     setVal("assessor", "D. Todd");
@@ -95,14 +100,12 @@ async function startInspectionJob(jobId) {
     if (typeof saveForm === "function") {
       saveForm();
     }
-
   }, 100);
 
   console.log("Loaded job:", job);
 }
 
 window.addEventListener("DOMContentLoaded", function () {
-
   const surveyView = document.getElementById("surveyView");
   if (surveyView) surveyView.style.display = "none";
 
@@ -113,5 +116,4 @@ window.addEventListener("DOMContentLoaded", function () {
   if (actionsBar) actionsBar.style.display = "none";
 
   loadJobsDashboard();
-
 });

@@ -165,7 +165,7 @@ body.report #reportView{display:block}
 <div class="intro">Record each door, attach photos, then <b>This door</b> or <b>All doors</b> &rarr; <b>Generate PDFs</b>. The report and the quote are now produced as <b>two separate documents</b>. Everything stays on this device. <span style="opacity:.6">(v10)</span></div>
 <div class="doors"><div class="inner" id="doorsStrip"></div></div>
 
-<div class="wrap">
+<div class="wrap" id="surveyView">
   <div class="util"><span class="lbl">Your entries save automatically on this device.</span>
     <button onclick="backup()">⬇ Back up to file</button>
     <button onclick="document.getElementById('restoreInput').click()">⬆ Add doors from file</button>
@@ -701,7 +701,64 @@ function renderThumbs(key){
 }
 function rmPhoto(key,idx){doors[cur].photos[key].splice(idx,1);renderThumbs(key);persist();}
 
-function persist(){try{localStorage.setItem(KEY,JSON.stringify({doors:doors,cur:cur}));}catch(e){}}
+function persist(){
+  try{
+    localStorage.setItem(KEY,JSON.stringify({doors:doors,cur:cur}));
+  }catch(e){}
+
+  if(typeof syncCurrentDoor==="function"){
+    syncCurrentDoor();
+  }
+}
+async function syncCurrentDoor(){
+
+  console.log("syncCurrentDoor() called");
+
+  console.log("currentJobId =", window.currentJobId);
+  console.log("fdimsSupabase =", window.fdimsSupabase);
+
+  const door = doors[cur];
+  console.log("door =", door);
+
+  if(!window.currentJobId){
+    console.log("STOP: no currentJobId");
+    return;
+  }
+
+  if(!window.fdimsSupabase){
+    console.log("STOP: no fdimsSupabase");
+    return;
+  }
+
+  if(!door){
+    console.log("STOP: no door");
+    return;
+  }
+
+  const payload = {
+    job_id: window.currentJobId,
+    door_index: cur,
+    door_name: door.fields.a_name || "",
+    door_type: door.fields.a_type || "",
+    overall_outcome: door.outcome || null,
+    fields: door.fields || {},
+    section_outcomes: {}
+  };
+
+const result = await window.fdimsSupabase
+  .from("doors")
+  .upsert(payload, { onConflict: "job_id,door_index" })
+  .select();
+
+console.log("Door sync result:", result);
+
+if(result.error){
+  console.error("Door sync failed:", result.error);
+}else{
+  console.log("Door synced to Supabase:", result.data);
+}
+}
+
 function restore(){try{var raw=localStorage.getItem(KEY);if(raw){var d=JSON.parse(raw);if(d.doors&&d.doors.length){doors=d.doors;cur=d.cur||0;return;}}}catch(e){}doors=[blankDoor()];cur=0;}
 function backup(){saveForm();try{var data=JSON.stringify({doors:doors,cur:cur});var blob=new Blob([data],{type:"application/json"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download="LK-fire-door-survey-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1500);}catch(e){alert("Could not create the backup file.");}}
 function restoreFile(input){var f=input.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(e){try{var d=JSON.parse(e.target.result);if(d.doors&&d.doors.length){if(confirm("Add "+d.doors.length+" door(s) from this file to your current list?")){var had=doors.length;if(had===1&&!doors[0].fields.a_name&&Object.keys(doors[0].photos||{}).length===0){doors=d.doors;}else{doors=doors.concat(d.doors);}cur=doors.length-1;persist();loadDoor();alert("Added "+d.doors.length+" door(s).");}}else{alert("That file does not look like a survey backup.");}}catch(err){alert("Could not read that file.");}input.value="";};rd.readAsText(f);}
