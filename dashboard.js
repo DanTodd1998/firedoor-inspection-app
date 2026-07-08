@@ -48,6 +48,22 @@ ${
       </button>`
     : ""
 }
+${
+  job.status === "Inspected"
+    ? `
+      <hr style="margin:12px 0">
+
+      <strong>Documents</strong><br>
+
+      <button class="btn btn-ghost"
+              style="margin-top:8px"
+              onclick="viewJobDocuments('${job.id}')">
+              <div id="docs-${job.id}" style="margin-top:10px;"></div>
+        📄 View Documents
+      </button>
+    `
+    : ""
+}
               </div>
             `).join("")
             : "<p>No booked jobs found.</p>"
@@ -250,4 +266,55 @@ function setDashboardStatus(status) {
 }
 async function openInspectionHistory(jobId) {
   return startInspectionJob(jobId);
+}
+async function viewJobDocuments(jobId) {
+  const { data, error } = await window.fdimsSupabase
+    .from("job_documents")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    alert("Could not load documents.");
+    console.error(error);
+    return;
+  }
+
+  console.log("Job documents:", data);
+  if (!data.length) {
+  alert("No documents found for this job yet.");
+  return;
+}
+
+const box = document.getElementById("docs-" + jobId);
+
+if (!box) {
+  alert("Document area not found.");
+  return;
+}
+
+box.innerHTML = data.map(doc => `
+  <div style="padding:8px; border:1px solid #ddd; border-radius:8px; margin-top:6px;">
+    <strong>${doc.document_type}</strong><br>
+    <small>${doc.file_name}</small><br>
+    <button class="btn btn-ghost"
+            style="margin-top:6px"
+            onclick="openJobDocument('${doc.storage_path}')">
+      Open
+    </button>
+  </div>
+`).join("");
+}
+async function openJobDocument(storagePath) {
+  const { data, error } = await window.fdimsSupabase.storage
+    .from("job-documents")
+    .createSignedUrl(storagePath, 60 * 10);
+
+  if (error) {
+    alert("Could not open document.");
+    console.error(error);
+    return;
+  }
+
+  window.open(data.signedUrl, "_blank");
 }
