@@ -130,7 +130,7 @@ async function startInspectionJob(jobId) {
 
   buildForm();
   loadDoor();
-
+window.scrollTo(0,0);
   if (surveyView) {
     surveyView.addEventListener("input", function () {
       saveForm();
