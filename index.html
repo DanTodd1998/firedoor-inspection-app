@@ -712,13 +712,7 @@ function persist(){
 }
 async function syncCurrentDoor(){
 
-  console.log("syncCurrentDoor() called");
-
-  console.log("currentJobId =", window.currentJobId);
-  console.log("fdimsSupabase =", window.fdimsSupabase);
-
-  const door = doors[cur];
-  console.log("door =", door);
+ const door = doors[cur];
 
   if(!window.currentJobId){
     console.log("STOP: no currentJobId");
