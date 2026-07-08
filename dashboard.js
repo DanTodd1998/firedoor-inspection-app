@@ -56,10 +56,40 @@ async function loadSavedDoorsForJob(jobId) {
   }
 
   if (savedDoors && savedDoors.length) {
-    doors = savedDoors.map(row => ({
-      fields: row.fields || {},
-      photos: {}
-    }));
+  doors = [];
+
+for (const row of savedDoors) {
+
+  const { data: photos } = await window.fdimsSupabase
+    .from("door_photos")
+    .select("*")
+    .eq("door_id", row.id);
+
+  const photoMap = {};
+
+  if (photos) {
+    for (const photo of photos) {
+
+      const { data } = await window.fdimsSupabase
+  .storage
+  .from("door-photos")
+  .createSignedUrl(photo.storage_path, 60 * 60);
+
+      if (!photoMap[photo.section_key]) {
+  photoMap[photo.section_key] = [];
+}
+
+console.log(data.signedUrl);
+photoMap[photo.section_key].push(data.signedUrl);
+    }
+  }
+
+  doors.push({
+    fields: row.fields || {},
+    photos: photoMap
+  });
+
+}
     cur = 0;
     console.log("Loaded saved doors:", savedDoors);
   } else {
