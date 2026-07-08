@@ -28,8 +28,12 @@ async function loadJobsDashboard() {
                 ${job.full_address || ""}<br>
                 <small>${job.inspection_date || ""}</small><br><br>
                 <button class="btn btn-primary" onclick="startInspectionJob('${job.id}')">
-                  Start Inspection
-                </button>
+  Start Inspection
+</button>
+
+<button class="btn btn-ghost" style="margin-top:8px" onclick="finishInspectionJob('${job.id}')">
+  Finish Inspection
+</button>
               </div>
             `).join("")
             : "<p>No booked jobs found.</p>"
@@ -178,3 +182,24 @@ window.addEventListener("DOMContentLoaded", function () {
 
   loadJobsDashboard();
 });
+async function finishInspectionJob(jobId) {
+
+  if (!confirm("Mark this inspection as completed?")) return;
+
+  const { error } = await window.fdimsSupabase
+  .from("jobs")
+  .update({
+    status: "Inspected"
+  })
+  .eq("id", jobId);
+
+  if (error) {
+    console.error(error);
+    alert(error.message);
+    return;
+  }
+
+  alert("Inspection marked as completed.");
+
+  loadJobsDashboard();
+}
