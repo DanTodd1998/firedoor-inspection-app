@@ -148,7 +148,7 @@ if (job.status === "Booked") {
 }
   window.currentJob = job;
   window.currentJobId = jobId;
-
+sessionStorage.setItem("currentJobId", jobId);
   const dashboard = document.getElementById("jobsDashboard");
   if (dashboard) dashboard.style.display = "none";
 
@@ -211,7 +211,13 @@ window.addEventListener("DOMContentLoaded", function () {
   const actionsBar = document.querySelector(".actions");
   if (actionsBar) actionsBar.style.display = "none";
 
+  const savedJobId = sessionStorage.getItem("currentJobId");
+
+if (savedJobId && typeof startInspectionJob === "function") {
+  startInspectionJob(savedJobId);
+} else {
   loadJobsDashboard();
+}
 });
 async function finishInspectionJob(jobId) {
 

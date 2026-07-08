@@ -179,6 +179,7 @@ body.report #reportView{display:block}
 </div>
 
 <div class="actions" id="surveyActions"><div class="inner">
+  <button class="btn btn-ghost" onclick="backToJobs()">← Back to Jobs</button>
   <button class="btn btn-ghost" onclick="generate('all')">All doors</button>
   <button class="btn btn-primary" onclick="generate('one')">This door &rarr; report</button>
 </div></div>
@@ -953,7 +954,7 @@ document.getElementById("sheet").innerHTML=reportFor(d);
   document.getElementById("surveyActions").style.display="none";
   if(!document.getElementById("reportActions")){
     var bar=document.createElement("div");bar.className="actions";bar.id="reportActions";
-    bar.innerHTML='<div class="inner"><button class="btn btn-ghost" onclick="backToSurvey()">Edit</button><button class="btn btn-ghost" onclick="nextDoorReport()">Next ▸</button><button class="btn btn-primary" id="dlpdf" onclick="downloadPdf()">⬇ Generate PDFs</button></div>';
+    bar.innerHTML='<div class="inner"><button class="btn btn-ghost" onclick="backToJobs()">← Back to Jobs</button><button class="btn btn-ghost" onclick="backToSurvey()">Edit</button><button class="btn btn-ghost" onclick="nextDoorReport()">Next ▸</button><button class="btn btn-primary" id="dlpdf" onclick="downloadPdf()">⬇ Generate PDFs</button></div>';
     document.body.appendChild(bar);
   }
   document.getElementById("reportActions").style.display="block";
@@ -1042,6 +1043,10 @@ async function savePdf(which){
   try{var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();}catch(e){}
   setTimeout(function(){ try{ window.location.href=url; }catch(e){ window.open(url,"_blank"); } }, 250);
 }
+function backToJobs() {
+  sessionStorage.removeItem("currentJobId");
+  window.location.href = "index.html";
+}
 function backToSurvey(){document.title="London & Kent Fire Door Survey";var _pr=document.getElementById("pdfready");if(_pr)_pr.style.display="none";document.body.classList.remove("report");document.getElementById("modeBadge").textContent="Survey";document.getElementById("reportActions").style.display="none";document.getElementById("surveyActions").style.display="block";loadDoor();window.scrollTo(0,0);}
 
 // buildForm now starts after selecting a booked job
@@ -1050,6 +1055,11 @@ function backToSurvey(){document.title="London & Kent Fire Door Survey";var _pr=
 // loadDoor();
 var _ls=document.getElementById("lkstripimg");if(_ls)_ls.src=LKB;
 document.addEventListener("input",saveForm);
+const savedJobId = sessionStorage.getItem("currentJobId");
+
+if (savedJobId && typeof startInspectionJob === "function") {
+  startInspectionJob(savedJobId);
+}
 </script>
 </body>
 </html>
