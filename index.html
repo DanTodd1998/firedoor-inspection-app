@@ -165,7 +165,7 @@ body.report #reportView{display:block}
 <div class="intro">Record each door, attach photos, then <b>This door</b> or <b>All doors</b> &rarr; <b>Generate PDFs</b>. The report and the quote are now produced as <b>two separate documents</b>. Everything stays on this device. <span style="opacity:.6">(v10)</span></div>
 <div class="doors"><div class="inner" id="doorsStrip"></div></div>
 
-<div class="wrap" id="surveyView">
+<div class="wrap" id="appWrap"></div>
   <div class="util"><span class="lbl">Your entries save automatically on this device.</span>
     <button onclick="backup()">⬇ Back up to file</button>
     <button onclick="document.getElementById('restoreInput').click()">⬆ Add doors from file</button>
@@ -173,7 +173,7 @@ body.report #reportView{display:block}
     <input id="restoreInput" type="file" accept=".json,application/json" onchange="restoreFile(this)" style="display:none">
   </div>
   <div class="lkstrip"><img class="lkbimg" id="lkstripimg" alt="London & Kent Construction"></div>
-  <div id="surveyView"></div>
+<div id="formView"></div>
   <div id="reportView">
     <div class="pdfhelp">Tap <b>⬇ Download PDF</b> below. A green <b>Save / share PDF</b> button appears – tap it and your phone’s share menu opens; choose <b>Save to Files</b> (or email/AirDrop). On a computer or Android it downloads automatically.<br><br><b>All doors in one folder:</b> create a folder named after the property, then save this door, tap <b>Next ▸</b>, save the next, and so on – each file is named with the property and door. Or use <b>All doors</b> for a single combined PDF.<br><br>Prefer your browser’s own print-to-PDF? <a href="#" onclick="window.print();return false;">Use Print instead</a>.</div>
     <div class="sheet" id="sheet"></div></div>
@@ -644,7 +644,7 @@ function buildForm(){
   OVERALL.forEach(function(f){h+=field(f);});h+='</div>';
   h+='<div class="util" style="margin-top:4px"><button type="button" onclick="draftScope()">\u270e Draft / refresh quote scope from outcomes</button></div>';
   h+='</div></div>';
-  document.getElementById("surveyView").innerHTML=h;
+  document.getElementById("formView").innerHTML=h;
 }
 
 function onSel(el){el.className=el.value?("v-"+el.value.replace(/[^A-Za-z]/g,"")):"";saveForm();}
@@ -672,27 +672,129 @@ function loadDoor(){
 function switchDoor(i){saveForm();cur=i;loadDoor();window.scrollTo(0,0);}
 function addDoor(){saveForm();doors.push(blankDoor());cur=doors.length-1;loadDoor();window.scrollTo(0,0);}
 function delDoor(i){if(!confirm("Delete "+doorLabel(i)+"? This cannot be undone."))return;doors.splice(i,1);if(!doors.length)doors.push(blankDoor());if(cur>=doors.length)cur=doors.length-1;loadDoor();persist();}
-
 function addPhoto(key,input){
   var files=input.files;if(!files||!files.length)return;
   if(!doors[cur].photos[key])doors[cur].photos[key]=[];
+
   var pending=files.length;
+
   Array.prototype.forEach.call(files,function(file){
     var rd=new FileReader();
+
     rd.onload=function(e){
       var img=new Image();
+
       img.onload=function(){
         var max=1400,w=img.width,h=img.height;
-        if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
-        var c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);
-        doors[cur].photos[key].push(c.toDataURL("image/jpeg",0.82));
-        if(--pending===0){renderThumbs(key);persist();}
+        if(w>max||h>max){
+          if(w>h){h=Math.round(h*max/w);w=max;}
+          else{w=Math.round(w*max/h);h=max;}
+        }
+
+        var c=document.createElement("canvas");
+        c.width=w;
+        c.height=h;
+        c.getContext("2d").drawImage(img,0,0,w,h);
+
+        var dataUrl=c.toDataURL("image/jpeg",0.82);
+
+        doors[cur].photos[key].push(dataUrl);
+        uploadDoorPhotoToSupabase(key,dataUrl);
+
+        if(--pending===0){
+          renderThumbs(key);
+          persist();
+        }
       };
+
       img.src=e.target.result;
     };
+
     rd.readAsDataURL(file);
   });
+
   input.value="";
+}
+function dataUrlToBlob(dataUrl){
+  var parts=dataUrl.split(",");
+  var mime=parts[0].match(/:(.*?);/)[1];
+  var bin=atob(parts[1]);
+  var len=bin.length;
+  var arr=new Uint8Array(len);
+
+  for(var i=0;i<len;i++){
+    arr[i]=bin.charCodeAt(i);
+  }
+
+  return new Blob([arr],{type:mime});
+}
+
+async function uploadDoorPhotoToSupabase(sectionKey,dataUrl){
+  try{
+    if(!navigator.onLine) return;
+    if(!window.fdimsSupabase) return;
+    if(!window.currentJobId) return;
+
+    var door=doors[cur];
+    if(!door) return;
+
+    var doorResult=await window.fdimsSupabase
+      .from("doors")
+      .upsert({
+        job_id:window.currentJobId,
+        door_index:cur,
+        door_name:(door.fields&&door.fields.a_name)||"",
+        door_type:(door.fields&&door.fields.a_type)||"",
+        overall_outcome:(door.fields&&door.fields.overall)||null,
+        fields:door.fields||{},
+        section_outcomes:{}
+      },{onConflict:"job_id,door_index"})
+      .select();
+
+    if(doorResult.error){
+      console.error("Photo door sync failed:",doorResult.error);
+      return;
+    }
+
+    var savedDoor=doorResult.data&&doorResult.data[0];
+    if(!savedDoor||!savedDoor.id) return;
+
+    var blob=dataUrlToBlob(dataUrl);
+    var fileName=Date.now()+"-"+Math.random().toString(36).slice(2)+".jpg";
+    var storagePath=window.currentJobId+"/"+savedDoor.id+"/"+sectionKey+"/"+fileName;
+
+    var upload=await window.fdimsSupabase
+      .storage
+      .from("door-photos")
+      .upload(storagePath,blob,{
+        contentType:"image/jpeg",
+        upsert:false
+      });
+
+    if(upload.error){
+      console.error("Photo upload failed:",upload.error);
+      return;
+    }
+
+    var dbInsert=await window.fdimsSupabase
+      .from("door_photos")
+      .insert({
+        door_id:savedDoor.id,
+        job_id:window.currentJobId,
+        section_key:sectionKey,
+        storage_path:storagePath,
+        caption:""
+      });
+
+    if(dbInsert.error){
+      console.error("door_photos insert failed:",dbInsert.error);
+      return;
+    }
+
+    console.log("Photo uploaded to Supabase:",storagePath);
+  }catch(e){
+    console.error("Photo upload error:",e);
+  }
 }
 function renderThumbs(key){
   var arr=(doors[cur].photos&&doors[cur].photos[key])||[];
@@ -841,13 +943,13 @@ function generate(scope){
     ["b","c","d","e","f","g"].forEach(function(k){if(!f[k+"_out"])miss.push("Section "+k+" outcome");});
     if(!f.overall)miss.push("Overall outcome");
     if(miss.length){alert("Please complete on this door:\n\n\u2022 "+miss.join("\n\u2022 "));return;}
-    document.getElementById("sheet").innerHTML=reportFor(d);
+    document.body.classList.add("report");
+document.getElementById("sheet").innerHTML=reportFor(d);
   }else{
     var h="";
     doors.forEach(function(d){h+=reportFor(d);});document.getElementById("sheet").innerHTML=h;
   }
   var _p=(scope==="one"?doors[cur].fields.propName:(doors[0]&&doors[0].fields.propName))||"";if(scope==="one"){document.title=(_p?_p+" - ":"")+((doors[cur].fields.a_name)||"Door report");}else{document.title=_p||"Fire Door Survey";}
-  document.body.classList.add("report");
   document.getElementById("modeBadge").textContent="Report";
   document.getElementById("surveyActions").style.display="none";
   if(!document.getElementById("reportActions")){
