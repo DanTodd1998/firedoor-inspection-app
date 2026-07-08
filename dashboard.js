@@ -1,8 +1,10 @@
+ let currentDashboardStatus = "Booked";
+
 async function loadJobsDashboard() {
   const { data: jobs, error } = await window.fdimsSupabase
     .from("jobs")
     .select("id, job_number, status, contact_name, company_name, full_address, inspection_date, inspection_start")
-    .eq("status", "Booked")
+    .eq("status", currentDashboardStatus)
     .order("inspection_start", { ascending: true });
 
   if (error) {
@@ -16,8 +18,13 @@ async function loadJobsDashboard() {
 
   dashboard.innerHTML = `
     <div class="card">
-      <h2>Booked Fire Door Jobs</h2>
-      <div class="body">
+<h2>Fire Door Jobs</h2>
+
+<div style="display:flex; gap:8px; margin-bottom:12px;">
+  <button onclick="setDashboardStatus('Booked')">Booked</button>
+  <button onclick="setDashboardStatus('In Progress')">In Progress</button>
+  <button onclick="setDashboardStatus('Inspected')">Inspected</button>
+</div>      <div class="body">
         ${
           jobs.length
             ? jobs.map(job => `
@@ -114,7 +121,12 @@ async function startInspectionJob(jobId) {
     console.error("Failed to load selected job:", error);
     return;
   }
-
+if (job.status === "Booked") {
+  await window.fdimsSupabase
+    .from("jobs")
+    .update({ status: "In Progress" })
+    .eq("id", jobId);
+}
   window.currentJob = job;
   window.currentJobId = jobId;
 
@@ -200,6 +212,14 @@ async function finishInspectionJob(jobId) {
   }
 
   alert("Inspection marked as completed.");
+
+  loadJobsDashboard();
+}
+function setDashboardStatus(status) {
+  currentDashboardStatus = status;
+
+  const oldDashboard = document.getElementById("jobsDashboard");
+  if (oldDashboard) oldDashboard.remove();
 
   loadJobsDashboard();
 }
