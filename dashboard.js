@@ -35,12 +35,16 @@ async function loadJobsDashboard() {
                 ${job.full_address || ""}<br>
                 <small>${job.inspection_date || ""}</small><br><br>
                 <button class="btn btn-primary" onclick="startInspectionJob('${job.id}')">
-  Start Inspection
+  ${job.status === "Inspected" ? "Open Inspection" : "Start Inspection"}
 </button>
 
-<button class="btn btn-ghost" style="margin-top:8px" onclick="finishInspectionJob('${job.id}')">
-  Finish Inspection
-</button>
+${
+  job.status === "In Progress"
+    ? `<button class="btn btn-ghost" style="margin-top:8px" onclick="finishInspectionJob('${job.id}')">
+        Finish Inspection
+      </button>`
+    : ""
+}
               </div>
             `).join("")
             : "<p>No booked jobs found.</p>"
@@ -118,11 +122,16 @@ photoMap[photo.section_key].push(data.signedUrl);
 }
 
 async function startInspectionJob(jobId) {
-  const { data: job, error } = await window.fdimsSupabase
+
+  [".topbar", ".intro", ".doors", ".util", ".lkstrip"].forEach(selector => {
+    const el = document.querySelector(selector);
+    if (el) el.style.display = "";
+});
+
+const { data: job, error } = await window.fdimsSupabase
     .from("jobs")
     .select("*")
     .eq("id", jobId)
-    .single();
 
   if (error) {
     console.error("Failed to load selected job:", error);
