@@ -975,7 +975,11 @@ async function downloadPdf(){
     var qbytes=await makePdf(window.PDFLib,arr,"quote");
     quoteName=base+" - Quotation.pdf";
     quoteBlob=new Blob([qbytes],{type:"application/pdf"});
-    showPdfLink();
+
+showPdfLink();
+
+await uploadJobDocument("Survey Report", pdfBlob, pdfName);
+await uploadJobDocument("Quotation", quoteBlob, quoteName);
   }catch(e){alert("Sorry, could not generate the PDFs: "+(e&&e.message?e.message:e));}
   if(btn){btn.textContent="\u2b07 Generate PDFs";btn.disabled=false;}
 }
@@ -988,6 +992,46 @@ function showPdfLink(){
     '<div class="hint2">Saving on iPhone only works when the file is opened in <b>Safari</b> (not from a Home-Screen icon or a preview window).</div>';
   box.style.display="block";
   try{box.scrollIntoView({block:"start"});}catch(e){}
+}
+async function uploadJobDocument(type, blob, fileName) {
+  console.log("uploadJobDocument called", {
+  type,
+  fileName,
+  currentJobId: window.currentJobId,
+  hasSupabase: !!window.fdimsSupabase,
+  hasBlob: !!blob
+});
+  if (!window.currentJobId || !window.fdimsSupabase || !blob) return;
+
+  var safeName = fileName.replace(/[^a-zA-Z0-9.\-_ ]/g, "-");
+  var storagePath = window.currentJobId + "/" + Date.now() + "-" + safeName;
+
+  var upload = await window.fdimsSupabase.storage
+    .from("job-documents")
+    .upload(storagePath, blob, {
+      contentType: "application/pdf",
+      upsert: true
+    });
+
+  if (upload.error) {
+    console.error("Document upload failed:", upload.error);
+    alert("PDF created, but upload to document library failed: " + upload.error.message);
+    return;
+  }
+
+  var insert = await window.fdimsSupabase
+    .from("job_documents")
+    .insert({
+      job_id: window.currentJobId,
+      document_type: type,
+      file_name: fileName,
+      storage_path: storagePath
+    });
+
+  if (insert.error) {
+    console.error("Document record failed:", insert.error);
+    alert("PDF uploaded, but document record failed: " + insert.error.message);
+  }
 }
 async function savePdf(which){
   which=which||"report";

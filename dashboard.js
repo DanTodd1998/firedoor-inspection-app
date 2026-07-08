@@ -34,7 +34,10 @@ async function loadJobsDashboard() {
                 ${job.company_name || ""}<br>
                 ${job.full_address || ""}<br>
                 <small>${job.inspection_date || ""}</small><br><br>
-                <button class="btn btn-primary" onclick="startInspectionJob('${job.id}')">
+                <button class="btn btn-primary"
+        onclick="${job.status === 'Inspected'
+          ? `openInspectionHistory('${job.id}')`
+          : `startInspectionJob('${job.id}')`}">
   ${job.status === "Inspected" ? "Open Inspection" : "Start Inspection"}
 </button>
 
@@ -238,4 +241,7 @@ function setDashboardStatus(status) {
   if (oldDashboard) oldDashboard.remove();
 
   loadJobsDashboard();
+}
+async function openInspectionHistory(jobId) {
+  return startInspectionJob(jobId);
 }
