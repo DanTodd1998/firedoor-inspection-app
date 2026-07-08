@@ -49,9 +49,16 @@ async function loadJobsDashboard() {
     </div>
   `;
 
-  document.body.prepend(dashboard);
-}
+  const existingDashboard = document.getElementById("jobsDashboard");
+if (existingDashboard) existingDashboard.remove();
 
+document.body.prepend(dashboard);
+document.querySelector(".topbar").style.display = "none";
+document.querySelector(".intro").style.display = "none";
+document.querySelector(".doors").style.display = "none";
+document.querySelector(".util").style.display = "none";
+document.querySelector(".lkstrip").style.display = "none";
+}
 async function loadSavedDoorsForJob(jobId) {
   const { data: savedDoors, error } = await window.fdimsSupabase
     .from("doors")
