@@ -321,50 +321,60 @@ box.innerHTML = data.map(doc => `
 }
 async function emailSurveyReport(jobId) {
 
-    const { data: job, error: jobError } = await window.fdimsSupabase
-        .from("jobs")
-        .select("*")
-        .eq("id", jobId)
-        .single();
+    if (!confirm("Email the Survey Report to the resident?")) return;
 
-    if (jobError) {
-        alert("Could not load job.");
-        console.error(jobError);
-        return;
-    }
-
-    const { data: docs, error: docsError } = await window.fdimsSupabase
-        .from("job_documents")
-        .select("*")
-        .eq("job_id", jobId)
-        .ilike("document_type", "%survey%")
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-    if (docsError) {
-        alert("Could not load Survey Report.");
-        console.error(docsError);
-        return;
-    }
-
-    if (!docs.length) {
-        alert("No Survey Report found for this job.");
-        return;
-    }
-
-    console.log("Job:", job);
-    console.log("Survey Report:", docs[0]);
-
-    alert(
-        "Ready to email Survey Report to:\n\n" +
-        job.email +
-        "\n\nFile:\n" +
-        docs[0].file_name
+    const { data, error } = await window.fdimsSupabase.functions.invoke(
+        "email-job-document",
+        {
+            body: {
+                jobId: jobId,
+                documentType: "survey"
+            }
+        }
     );
+
+    if (error) {
+        alert("Email failed.");
+        console.error(error);
+        return;
+    }
+
+    if (!data.success) {
+        alert("Email failed: " + (data.error || "Unknown error"));
+        console.error(data);
+        return;
+    }
+
+    alert(data.message);
 }
 
 async function emailQuotation(jobId) {
-    alert("Email Quotation: " + jobId);
+
+    if (!confirm("Email the Quotation to the resident?")) return;
+
+    const { data, error } = await window.fdimsSupabase.functions.invoke(
+        "email-job-document",
+        {
+            body: {
+                jobId: jobId,
+                documentType: "quotation"
+            }
+        }
+    );
+
+    if (error) {
+        alert("Email failed.");
+        console.error(error);
+        return;
+    }
+
+    if (!data.success) {
+        alert("Email failed: " + (data.error || "Unknown error"));
+        console.error(data);
+        return;
+    }
+
+    alert(data.message);
 }
 async function openJobDocument(storagePath) {
   const { data, error } = await window.fdimsSupabase.storage
