@@ -61,6 +61,19 @@ ${
               <div id="docs-${job.id}" style="margin-top:10px;"></div>
         📄 View Documents
       </button>
+      <button
+    class="btn btn-success"
+    style="margin-top:8px"
+    onclick="emailSurveyReport('${job.id}')">
+    📧 Email Survey Report
+</button>
+
+<button
+    class="btn btn-success"
+    style="margin-top:8px"
+    onclick="emailQuotation('${job.id}')">
+    💷 Email Quotation
+</button>
     `
     : ""
 }
@@ -278,6 +291,7 @@ async function viewJobDocuments(jobId) {
     alert("Could not load documents.");
     console.error(error);
     return;
+
   }
 
   console.log("Job documents:", data);
@@ -304,6 +318,53 @@ box.innerHTML = data.map(doc => `
     </button>
   </div>
 `).join("");
+}
+async function emailSurveyReport(jobId) {
+
+    const { data: job, error: jobError } = await window.fdimsSupabase
+        .from("jobs")
+        .select("*")
+        .eq("id", jobId)
+        .single();
+
+    if (jobError) {
+        alert("Could not load job.");
+        console.error(jobError);
+        return;
+    }
+
+    const { data: docs, error: docsError } = await window.fdimsSupabase
+        .from("job_documents")
+        .select("*")
+        .eq("job_id", jobId)
+        .ilike("document_type", "%survey%")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+    if (docsError) {
+        alert("Could not load Survey Report.");
+        console.error(docsError);
+        return;
+    }
+
+    if (!docs.length) {
+        alert("No Survey Report found for this job.");
+        return;
+    }
+
+    console.log("Job:", job);
+    console.log("Survey Report:", docs[0]);
+
+    alert(
+        "Ready to email Survey Report to:\n\n" +
+        job.email +
+        "\n\nFile:\n" +
+        docs[0].file_name
+    );
+}
+
+async function emailQuotation(jobId) {
+    alert("Email Quotation: " + jobId);
 }
 async function openJobDocument(storagePath) {
   const { data, error } = await window.fdimsSupabase.storage
