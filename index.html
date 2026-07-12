@@ -227,9 +227,44 @@ async function makePdf(PDFLib, arr, mode){
   function para(t,size,font,color,lead){ font=font||fr;color=color||ink;size=size||7.5;lead=lead||(size+2.5); const lines=wrap(t,font,size,CW-6); ensure(lines.length*lead+1); let vy=y-size; for(const l of lines){ page.drawText(l,{x:M+3,y:vy,size:size,font:font,color:color}); vy-=lead; } y-=lines.length*lead+1; }
   async function embed(dataURL){ const b64=dataURL.split(',')[1]; const bytes=(typeof atob!=='undefined')?Uint8Array.from(atob(b64),c=>c.charCodeAt(0)):Uint8Array.from(Buffer.from(b64,'base64')); return /^data:image\/png/i.test(dataURL)? doc.embedPng(bytes): doc.embedJpg(bytes); }
   let bImg=null; try{ bImg=await embed(LKB); }catch(e){}
-  const imgCache={};
-  async function getImg(d){ if(imgCache[d]===undefined){ try{imgCache[d]=await embed(d);}catch(e){imgCache[d]=null;} } return imgCache[d]; }
+  const imgCache = {};
 
+async function getImg(src) {
+  if (imgCache[src] !== undefined) {
+    return imgCache[src];
+  }
+
+  try {
+    let bytes;
+    let contentType = "";
+
+    if (String(src).startsWith("data:image/")) {
+      const base64 = String(src).split(",")[1];
+      bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      contentType = String(src).match(/^data:(image\/[^;]+)/i)?.[1] || "";
+    } else {
+      const response = await fetch(src);
+
+      if (!response.ok) {
+        throw new Error(`Photo fetch failed: ${response.status}`);
+      }
+
+      contentType = response.headers.get("content-type") || "";
+      bytes = new Uint8Array(await response.arrayBuffer());
+    }
+
+    if (contentType.includes("png")) {
+      imgCache[src] = await doc.embedPng(bytes);
+    } else {
+      imgCache[src] = await doc.embedJpg(bytes);
+    }
+  } catch (error) {
+    console.error("Could not embed report photo:", src, error);
+    imgCache[src] = null;
+  }
+
+  return imgCache[src];
+}
   function grid(pairs){
     const colW=CW/2, lh=11, pad=4;
     for(let i=0;i<pairs.length;i+=2){
