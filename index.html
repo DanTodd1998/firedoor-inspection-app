@@ -18,7 +18,7 @@
 *{box-sizing:border-box}
 html,body{margin:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
-  color:var(--ink);background:var(--bg);-webkit-text-size-adjust:100%;line-height:1.45}
+  color:var(--ink);background:var(--bg);-webkit-text-size-adjust:100%;line-height:1.45;padding-bottom:calc(130px + env(safe-area-inset-bottom,0px))}
 .wrap{max-width:880px;margin:0 auto;padding:0 14px 130px}
 
 .topbar{position:sticky;top:0;z-index:30;background:var(--teal);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18)}
@@ -225,6 +225,10 @@ async function makePdf(PDFLib, arr, mode){
   function outColor(o){ return o==='Pass'?green:o==='Fail'?red:o==='Remedial'?amber:o==='Not accessed'?grey:ink; }
   function band(t,h){ h=h||13; ensure(h+2); page.drawRectangle({x:M,y:y-h,width:CW,height:h,color:blue}); page.drawText(san(t),{x:M+5,y:y-h+3.5,size:8,font:fb,color:white}); y-=h+2; }
   function para(t,size,font,color,lead){ font=font||fr;color=color||ink;size=size||7.5;lead=lead||(size+2.5); const lines=wrap(t,font,size,CW-6); ensure(lines.length*lead+1); let vy=y-size; for(const l of lines){ page.drawText(l,{x:M+3,y:vy,size:size,font:font,color:color}); vy-=lead; } y-=lines.length*lead+1; }
+  /* Estimate height (pt) a para() call will consume, without drawing. Mirrors para()'s math. */
+  function paraHeight(t,size,font,lead){ font=font||fr;size=size||7.5;lead=lead||(size+2.5); const lines=wrap(t,font,size,CW-6); return lines.length*lead+1; }
+  /* If the next block of height h won't fit on the current page (and we're not already at a fresh page top), start a new page so the block stays together. */
+  function keepTogether(h){ if(y-h < M && y < H-M-1) np(); }
   async function embed(dataURL){ const b64=dataURL.split(',')[1]; const bytes=(typeof atob!=='undefined')?Uint8Array.from(atob(b64),c=>c.charCodeAt(0)):Uint8Array.from(Buffer.from(b64,'base64')); return /^data:image\/png/i.test(dataURL)? doc.embedPng(bytes): doc.embedJpg(bytes); }
   let bImg=null; try{ bImg=await embed(LKB); }catch(e){}
   const imgCache = {};
@@ -297,8 +301,18 @@ async function getImg(src) {
     para('Visual, non-invasive inspection of accessible elements only; no destructive opening-up. Areas not accessible were not inspected. Advisory only, for the named client and door; duty remains with the responsible person under the RRO 2005.',6.5,fr,mut,8.5);
 
     for(const s of SECTIONS){
-      band(s.key+'. '+s.title.replace(/&amp;/g,'&'));
       const items=s.fields.filter(fl=>g(fl[0])!=='').map(fl=>fl[1].replace(/&amp;/g,'&')+': '+g(fl[0]));
+      // Estimate the height of this whole section so it doesn't get split awkwardly.
+      let secH=15; // blue band (h 13 + 2 gap)
+      items.forEach(function(it){ secH+=paraHeight(it,7.5,fr,10.5); });
+      if(s.outcome) secH+=2+11; // outcome line
+      secH+=5; // trailing gap
+      const pageUsable=H-2*M;
+      // If it won't fit here but would fit on a fresh page, start a new page.
+      // Otherwise (section taller than a page) at least keep the heading with its first row.
+      if(secH<=pageUsable) keepTogether(secH);
+      else keepTogether(15+(items.length?paraHeight(items[0],7.5,fr,10.5):11));
+      band(s.key+'. '+s.title.replace(/&amp;/g,'&'));
       if(items.length){ items.forEach(function(it){ para(it,7.5,fr,ink,10.5); }); }
       if(s.outcome){
         const ov=g(s.key+'_out'); y-=2; ensure(11);
@@ -306,22 +320,35 @@ async function getImg(src) {
         const lw=fb.widthOfTextAtSize('Outcome: ',8);
         page.drawText(san(ov||'-'),{x:M+3+lw,y:y-8,size:8,font:fb,color:outColor(ov)});
         y-=11;
-        const rec= ov==='Fail'?REC[s.key]: ov==='Pass'?PASS: ov==='Not accessed'?NAREC: '-';
-        if(rec && rec!=='-') para('Recommendation: '+rec,6.8,fr,mut,8.6);
       }
       y-=5;
     }
 
-    const failed=[],na=[]; ['b','c','d','e','f','g'].forEach(k=>{ const o=g(k+'_out'); const ti=SECTIONS.filter(x=>x.key===k)[0].title.replace(/&amp;/g,'&'); if(o==='Fail')failed.push(k+'. '+ti); if(o==='Not accessed')na.push(k); });
+    // Keep the declaration heading with the overall outcome and the start of the
+    // recommendation / signature so the block isn't split awkwardly across a page break.
+    const recTxt=g('door_rec_summary')||g('notes');
+    let declH=15+11; // band + overall outcome line
+    if(recTxt && recTxt.trim()){
+      declH += 6+13; // gap + "Recommended Remedial Work" heading
+      recTxt.split(/\r?\n/).forEach(function(ln){ declH += ln.trim()?paraHeight(ln,7.5,fr,10.5):4; });
+    }
+    declH+=34+4+12+14+14; // rule + signature rows
+    if(declH<=H-2*M) keepTogether(declH);
+    else keepTogether(15+11+40); // at least band + overall + signature block header room
     band('SUMMARY & DECLARATION');
     const ovr=g('overall'); ensure(11);
     page.drawText('Overall outcome: ',{x:M+3,y:y-8,size:8,font:fb,color:ink});
     let lw=fb.widthOfTextAtSize('Overall outcome: ',8);
     page.drawText(san(ovr||'-'),{x:M+3+lw,y:y-8,size:8,font:fb,color:outColor(ovr)}); y-=11;
-    if(failed.length) para('Requires remediation: '+failed.join(';  '),7,fr,ink,9);
-    else if(na.length) para('Not inspected (no access) - see notes below.',7,fr,ink,9);
-    if(g('notes')) para('Notes: '+g('notes'),7,fr,ink,9);
+    const recSummary=g('door_rec_summary')||g('notes');
+    if(recSummary && recSummary.trim()){
+      y-=6; ensure(11);
+      page.drawText('Recommended Remedial Work',{x:M+3,y:y-8,size:8.5,font:fb,color:ink}); y-=13;
+      recSummary.split(/\r?\n/).forEach(function(ln){ if(ln.trim()) para(ln,7.5,fr,ink,10.5); else y-=4; });
+    }
 
+    // Keep the signature block (rule + assessor + signature) together.
+    keepTogether(34+4+12+14+14);
     ensure(34); y-=4;
     page.drawLine({start:{x:M+3,y:y},end:{x:M+CW-3,y:y},thickness:0.6,color:line}); y-=12;
     page.drawText('Assessor: ',{x:M+3,y:y,size:8,font:fb,color:ink});
@@ -465,6 +492,23 @@ var REMEDIAL_SUMMARY={
 };
 var NAREC="Door not accessed at the time of visit – this element was not inspected. See the summary of recommendations.";
 var NA_SUMMARY="Access was not gained to inspect this door internally at the time of the visit. In line with similar doors throughout the building, it is recommended that the door is replaced with a third-party certificated FD30S fire door set incorporating compliant intumescent strips with cold smoke seals and a suitable self-closing device, and installed to achieve compliant door gaps and tolerances in accordance with BS 8214 and relevant British Standards.";
+/* ---- Quick recommendation lines for the "Add recommendation" dropdown. ----
+   EDIT THIS LIST FREELY: change wording / BS numbers, add or remove lines.
+   Each string is one selectable line that gets appended into the recommendation
+   box. This is the ONLY place to edit these. */
+var REC_OPTIONS=[
+  "Adjust door to achieve compliant perimeter gaps in accordance with BS 8214.",
+  "Fit/replace intumescent strips and cold smoke seals to the frame in accordance with BS 8214 and the door's certification.",
+  "Ensure 3 no. CE/UKCA-marked fire-rated hinges to BS EN 1935 (Grade 13) are installed and correctly fitted.",
+  "Install self-closing device to BS EN 1154 and adjust to fully close and latch from any position.",
+  "Ensure latch engages fully and holds the door closed against the closer.",
+  "Reinstate/replace fire-rated glazing and intumescent glazing seals to the certified specification.",
+  "Repair minor leaf/frame damage in accordance with manufacturer's certification.",
+  "Replace with FD30S.",
+  "Fit compliant 'Fire Door Keep Shut' signage to BS 5499 (both faces where required).",
+  "Fit 'Fire Door Keep Locked' signage to cupboard/riser doors as appropriate.",
+  "Replace non-fire-rated letterplate/spy-hole with a certified intumescent-rated unit."
+];
 var PF=["","Pass","Fail","N/A"], YN=["","Yes","No"], YNN=["","Yes","No","N/A"];
 
 /* ---- PRICING (charge rates from the Calculator; VAT 20%) ---- */
@@ -646,7 +690,7 @@ var OVERALL=[
 
 var doors=[], cur=0, KEY="lk_fds_v2", repScope="one", pdfBlob=null, pdfName="", quoteBlob=null, quoteName="";
 function blankDoor(){return {fields:{assessor:"D. Todd"},photos:{}};}
-function allIds(){var a=[];META.forEach(function(f){a.push(f[0]);});SECTIONS.forEach(function(s){s.fields.forEach(function(f){a.push(f[0]);});if(s.outcome)a.push(s.key+"_out");});OVERALL.forEach(function(f){a.push(f[0]);});return a;}
+function allIds(){var a=[];META.forEach(function(f){a.push(f[0]);});SECTIONS.forEach(function(s){s.fields.forEach(function(f){a.push(f[0]);});if(s.outcome)a.push(s.key+"_out");});OVERALL.forEach(function(f){a.push(f[0]);});a.push("door_rec_summary");return a;}
 
 function field(f){
   var id=f[0],label=f[1],type=f[2],opts=f[3],req=f[4],labels=f[5];
@@ -678,6 +722,13 @@ function buildForm(){
   h+='<div class="card"><h2>Outcome &amp; Summary</h2><div class="body"><div class="row">';
   OVERALL.forEach(function(f){h+=field(f);});h+='</div>';
   h+='<div class="util" style="margin-top:4px"><button type="button" onclick="draftScope()">\u270e Draft / refresh quote scope from outcomes</button></div>';
+  h+='<details class="rec-summary" style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">Override Summary of Recommendations</summary>'+
+     '<div class="f full" style="margin-top:6px"><label for="rec_picker">Add a standard recommendation (appends to the box below \u2013 pick several, then edit as needed)</label>'+
+     '<select id="rec_picker" onchange="addRecLine(this)"><option value="">\u2014 add recommendation \u2014</option>'+
+     REC_OPTIONS.map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>';}).join('')+
+     '</select></div>'+
+     '<div class="f full" style="margin-top:6px"><label for="door_rec_summary">Recommendation summary for this door. This text appears under SUMMARY &amp; DECLARATION in the survey report. Leave blank to show nothing.</label>'+
+     '<textarea id="door_rec_summary" rows="8" oninput="saveForm()"></textarea></div></details>';
   h+='</div></div>';
   document.getElementById("formView").innerHTML=h;
 }
@@ -698,6 +749,17 @@ function renderStrip(){
 
 function gv(id){var e=document.getElementById(id);return e?e.value:"";}
 function saveForm(){if(!doors[cur])return;var f={};allIds().forEach(function(i){f[i]=gv(i);});doors[cur].fields=f;renderStrip();persist();}
+function addRecLine(sel){
+  var line=sel&&sel.value;if(!line)return;
+  var ta=document.getElementById("door_rec_summary");
+  if(ta){
+    var cur=ta.value.replace(/\s+$/,"");
+    ta.value=cur?(cur+"\n\n"+line):line;
+    saveForm();
+    try{ta.focus();ta.selectionStart=ta.selectionEnd=ta.value.length;}catch(e){}
+  }
+  sel.value=""; // reset so the same or another line can be picked again
+}
 function loadDoor(){
   var d=doors[cur]||blankDoor();
   allIds().forEach(function(i){var e=document.getElementById(i);if(e){e.value=(d.fields&&d.fields[i])||"";if(e.tagName==="SELECT")onSelNoSave(e);}});
@@ -925,29 +987,15 @@ function reportFor(door){
     s.fields.forEach(function(fl){h+=kvRow(fl[1].replace(/&amp;/g,"&"),g(fl[0]),"l");});
     if(s.outcome){var ov=g(s.key+"_out");h+='<tr><td class="k">Outcome</td><td class="out '+ov.replace(/[^A-Za-z]/g,"")+'">'+(ov||"\u2014")+'</td></tr>';}
     h+='</table>';
-    if(s.outcome){var ov2=g(s.key+"_out");var rec=ov2==="Fail"?REC[s.key]:ov2==="Pass"?PASS:ov2==="Not accessed"?NAREC:"—";h+='<div class="rec-h">Recommendations</div><div class="rec">'+esc(rec)+'</div>';}
   });
-  var failed=[];["b","c","d","e","f","g"].forEach(function(k){if(g(k+"_out")==="Fail"){failed.push(k+". "+SECTIONS.filter(function(x){return x.key===k;})[0].title.replace(/&amp;/g,"&"));}});
-  var na=[];["b","c","d","e","f","g"].forEach(function(k){if(g(k+"_out")==="Not accessed"){na.push(k+". "+SECTIONS.filter(function(x){return x.key===k;})[0].title.replace(/&amp;/g,"&"));}});
-  /* ---- SUMMARY OF REMEDIAL WORKS (plain-English client readthrough, no prices) ---- */
-  h+='<div class="sec-band">SUMMARY OF REMEDIAL WORKS</div>';
-  var works=[];["b","c","d","e","f","g"].forEach(function(k){if(g(k+"_out")==="Fail"){works.push(REMEDIAL_SUMMARY[k]);}});
-  if(g("overall")==="Pass"&&!works.length){
-    h+='<div class="rec">No remedial works are required. The door was found to be satisfactory and compliant at the time of survey.</div>';
-  }else if(!works.length&&na.length){
-    h+='<div class="rec">This door was not accessed at the time of survey. '+esc(NA_SUMMARY)+'</div>';
-  }else if(works.length){
-    h+='<div class="rec" style="margin-bottom:6px">The following remedial works are required to bring this door up to a compliant standard:</div><ul class="worklist">';
-    works.forEach(function(w){h+='<li>'+esc(w)+'</li>';});
-    h+='</ul>';
-  }else{
-    h+='<div class="rec">No specific remedial works were identified for this door at the time of survey.</div>';
-  }
-  h+='<div class="sec-band">SUMMARY OF RECOMMENDATIONS</div><table class="kv">';
-  h+='<tr><td class="k">Sections requiring remediation</td><td class="v l">'+(failed.length?esc(failed.join(";  ")):(na.length?"See ‘Sections not accessed’ and the summary notes below.":"None – all assessed sections satisfactory."))+'</td></tr>';
-  if(na.length){h+='<tr><td class="k">Sections not accessed</td><td class="v l">'+esc(na.join(";  "))+'</td></tr>';}
+  h+='<div class="sec-band">SUMMARY OF RECOMMENDATIONS</div>';
+  var usedNotesForRec=false;
+  var recSummary=g("door_rec_summary");
+  if(!(recSummary&&recSummary.trim())){recSummary=g("notes");usedNotesForRec=!!(recSummary&&recSummary.trim());}
+  h+='<table class="kv">';
   var ovr=g("overall");h+='<tr><td class="k">Overall door outcome</td><td class="out '+ovr.replace(/[^A-Za-z]/g,"")+'">'+(ovr||"\u2014")+'</td></tr></table>';
-  if(g("notes")){h+='<div class="rec-h">Surveyor\u2019s summary &amp; notes</div><div class="rec">'+esc(g("notes"))+'</div>';}
+  if(recSummary&&recSummary.trim()){h+='<div class="rec-h">Recommended Remedial Work</div><div class="rec">'+esc(recSummary).replace(/\r?\n/g,"<br>")+'</div>';}
+  if(g("notes")&&!usedNotesForRec){h+='<div class="rec-h">Surveyor\u2019s summary &amp; notes</div><div class="rec">'+esc(g("notes"))+'</div>';}
   h+='<div class="sign">Inspector: <b>D. Todd</b>&nbsp;&nbsp;&nbsp;&nbsp;Signature: <span class="sigfont">D. Todd</span>&nbsp;&nbsp;&nbsp;&nbsp;Date: '+esc(fmtDate(g("assessDate"))||"______________")+'</div>';
   h+='<div class="foot">London &amp; Kent Construction Ltd &middot; Wood Wharf, Horseferry Place, Greenwich, London SE10 9BB &middot; Tel 020 8850 7064 &middot; Visual / non-invasive inspection per BS 8214</div>';
   /* ---- PHOTOGRAPHIC APPENDIX (all photos collected here, with a bold divider) ---- */
@@ -1098,5 +1146,3 @@ if (savedJobId && typeof startInspectionJob === "function") {
 </script>
 </body>
 </html>
-
-
